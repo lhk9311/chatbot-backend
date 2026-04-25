@@ -24,3 +24,5 @@ require('./socket/chatSocket')(io);
 server.listen(3000, () => {
   console.log('서버 실행됨');
 });
+
+// 주석문 추가
