@@ -33,3 +33,25 @@ exports.getMessages = (req, res) => {
   });
 };
 
+exports.getFaqs = (req, res) => {
+  const sql = `
+    SELECT DISTINCT
+      s.name AS software_name,
+      f.question_keyword,
+      f.answer,
+      f.category
+    FROM faq f
+           JOIN software s ON f.software_id = s.id
+    ORDER BY s.name
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("FAQ 조회 실패:", err);
+      return res.status(500).json({ error: "FAQ 조회 실패" });
+    }
+
+    res.json(results);
+  });
+};
+
