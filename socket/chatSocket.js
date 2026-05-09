@@ -37,19 +37,54 @@ module.exports = (io) => {
         }
 
         // 소프트웨어 못 찾음
-        if (results.length === 0) {
+          if (results.length === 0) {
 
-          const reply = "해당 소프트웨어를 찾을 수 없습니다.";
+              const faqOnlySql = `
+    SELECT answer
+    FROM faq
+    WHERE ? LIKE CONCAT('%', question_keyword, '%')
+    LIMIT 1
+  `;
 
-          db.query(
-              "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
-              [message, reply]
-          );
+              db.query(
+                  faqOnlySql,
+                  [message],
+                  (faqErr, faqResults) => {
 
-          socket.emit('chat response', reply);
+                      if (faqErr) {
+                          console.error(faqErr);
+                          socket.emit("chat response", "FAQ 조회 오류");
+                          return;
+                      }
 
-          return;
-        }
+                      if (faqResults.length > 0) {
+
+                          const reply = faqResults[0].answer;
+
+                          // DB 저장
+                          db.query(
+                              "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
+                              [message, reply]
+                          );
+
+                          // 사용자 응답
+                          socket.emit(
+                              "chat response",
+                              reply
+                          );
+
+                      } else {
+
+                          socket.emit(
+                              "chat response",
+                              "관련 FAQ를 찾을 수 없습니다."
+                          );
+                      }
+                  }
+              );
+
+              return;
+          }
 
         const sw = results[0];
 
@@ -57,16 +92,15 @@ module.exports = (io) => {
 
         // FAQ 조회
         const faqSql = `
-          SELECT answer
-          FROM faq
-          WHERE software_id = ?
-          AND ? LIKE CONCAT('%', question_keyword, '%')
-          LIMIT 1
+            SELECT answer
+            FROM faq
+            WHERE question_keyword = ?
+                LIMIT 1
         `;
 
         db.query(
             faqSql,
-            [sw.id, message],
+            [message],
             (faqErr, faqResults) => {
 
               if (faqErr) {
