@@ -1,160 +1,234 @@
 const db = require('../db');
+const askLLM = require('../services/openaiService');
 
 module.exports = (io) => {
 
-  io.on('connection', (socket) => {
+    io.on('connection', (socket) => {
 
-    console.log('사용자 소켓 연결됨');
+        console.log('사용자 소켓 연결됨');
 
-    socket.on('chat message', (message) => {
+        socket.on('chat message', (message) => {
 
-      const sql = `
-        SELECT s.*, sa.alias_name
-        FROM software_alias sa
-        JOIN software s ON sa.software_id = s.id
-        WHERE LOWER(?) LIKE CONCAT('%', LOWER(sa.alias_name), '%')
-        ORDER BY CHAR_LENGTH(sa.alias_name) DESC
-        LIMIT 1
-      `;
+            /*
+              소프트웨어 alias 검색
+            */
+            const sql = `
+                SELECT s.*, sa.alias_name
+                FROM software_alias sa
+                         JOIN software s
+                              ON sa.software_id = s.id
+                WHERE LOWER(?) LIKE CONCAT('%', LOWER(sa.alias_name), '%')
+                ORDER BY CHAR_LENGTH(sa.alias_name) DESC
+                    LIMIT 1
+            `;
 
-      db.query(sql, [message], (err, results) => {
+            db.query(sql, [message], (err, results) => {
 
-        // DB 오류
-        if (err) {
+                /*
+                  DB 오류
+                */
+                if (err) {
 
-          console.error(err);
+                    console.error(err);
 
-          const reply = "서버 오류 발생";
+                    const reply = "서버 오류 발생";
 
-          db.query(
-              "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
-              [message, reply]
-          );
+                    db.query(
+                        "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
+                        [message, reply]
+                    );
 
-          socket.emit('chat response', reply);
+                    socket.emit("chat response", reply);
 
-          return;
-        }
+                    return;
+                }
 
-        // 소프트웨어 못 찾음
-          if (results.length === 0) {
+                /*
+                  소프트웨어 못 찾음
+                */
+                if (results.length === 0) {
 
-              const faqOnlySql = `
-    SELECT answer
-    FROM faq
-    WHERE ? LIKE CONCAT('%', question_keyword, '%')
-    LIMIT 1
-  `;
+                    const faqOnlySql = `
+                        SELECT answer
+                        FROM faq
+                        WHERE LOWER(?) LIKE CONCAT('%', LOWER(question_keyword), '%')
+                        ORDER BY CHAR_LENGTH(question_keyword) DESC
+                            LIMIT 1
+                    `;
 
-              db.query(
-                  faqOnlySql,
-                  [message],
-                  (faqErr, faqResults) => {
+                    db.query(
+                        faqOnlySql,
+                        [message],
+                        async (faqErr, faqResults) => {
 
-                      if (faqErr) {
-                          console.error(faqErr);
-                          socket.emit("chat response", "FAQ 조회 오류");
-                          return;
-                      }
+                            /*
+                              FAQ 조회 오류
+                            */
+                            if (faqErr) {
 
-                      if (faqResults.length > 0) {
+                                console.error(faqErr);
 
-                          const reply = faqResults[0].answer;
+                                socket.emit(
+                                    "chat response",
+                                    "FAQ 조회 오류"
+                                );
 
-                          // DB 저장
-                          db.query(
-                              "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
-                              [message, reply]
-                          );
+                                return;
+                            }
 
-                          // 사용자 응답
-                          socket.emit(
-                              "chat response",
-                              reply
-                          );
+                            let reply = "";
 
-                      } else {
+                            /*
+                              FAQ 찾음
+                            */
+                            if (faqResults.length > 0) {
 
-                          socket.emit(
-                              "chat response",
-                              "관련 FAQ를 찾을 수 없습니다."
-                          );
-                      }
-                  }
-              );
+                                reply = faqResults[0].answer;
 
-              return;
-          }
+                            } else {
 
-        const sw = results[0];
+                                /*
+                                  FAQ 없음 → GPT
+                                */
 
-        let reply = "";
+                                const llmReply = await askLLM(message);
 
-        // FAQ 조회
-        const faqSql = `
-            SELECT answer
-            FROM faq
-            WHERE question_keyword = ?
-                LIMIT 1
-        `;
+                                reply =
+                                    `관련 FAQ를 찾을 수 없어 AI 답변을 제공합니다.\n\n🧠 AI 답변 : \n\n${llmReply}`;
 
-        db.query(
-            faqSql,
-            [message],
-            (faqErr, faqResults) => {
+                                /*
+                                  관리자 문의 등록
+                                */
+                                io.emit("admin-request", {
+                                    software: "미분류",
+                                    message: message,
+                                    createdAt: new Date()
+                                });
 
-              if (faqErr) {
+                            }
 
-                console.error("FAQ 조회 실패:", faqErr);
+                            /*
+                              DB 저장
+                            */
+                            db.query(
+                                "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
+                                [message, reply]
+                            );
 
-                return;
-              }
+                            /*
+                              사용자 응답
+                            */
+                            socket.emit(
+                                "chat response",
+                                reply
+                            );
 
-              // FAQ 찾음
-              if (faqResults.length > 0) {
+                        }
+                    );
 
-                reply = faqResults[0].answer;
+                    return;
+                }
 
-              } else {
+                /*
+                  소프트웨어 찾음
+                */
+                const sw = results[0];
 
-                // FAQ 없음
-                reply =
-                    `${sw.name} 관련 FAQ를 찾을 수 없습니다. 관리자 문의로 전환합니다.`;
+                /*
+                  FAQ 조회
+                */
+                const faqSql = `
+                    SELECT answer
+                    FROM faq
+                    WHERE LOWER(?) LIKE CONCAT('%', LOWER(question_keyword), '%')
+                    ORDER BY CHAR_LENGTH(question_keyword) DESC
+                        LIMIT 1
+                `;
 
-                console.log("관리자 이벤트 발생:", {
-                  software: sw.name,
-                  message: message
-                });
+                db.query(
+                    faqSql,
+                    [message],
+                    async (faqErr, faqResults) => {
 
-                io.emit("admin-request", {
-                  software: sw.name,
-                  message: message,
-                  createdAt: new Date()
-                });
-              }
+                        /*
+                          FAQ 조회 오류
+                        */
+                        if (faqErr) {
 
-              // 채팅 저장
-              db.query(
-                  "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
-                  [message, reply],
-                  (saveErr) => {
+                            console.error("FAQ 조회 실패:", faqErr);
 
-                    if (saveErr) {
-                      console.error("메시지 저장 실패:", saveErr);
+                            socket.emit(
+                                "chat response",
+                                "FAQ 조회 실패"
+                            );
+
+                            return;
+                        }
+
+                        let reply = "";
+
+                        /*
+                          FAQ 찾음
+                        */
+                        if (faqResults.length > 0) {
+
+                            reply = faqResults[0].answer;
+
+                        } else {
+
+                            /*
+                              FAQ 없음 → GPT
+                            */
+
+                            const llmReply = await askLLM(message);
+
+                            reply =
+                                `${sw.name} 관련 FAQ를 찾을 수 없어 AI 답변을 제공합니다.\n\n🧠 AI 답변 :\n\n${llmReply}`;
+
+                            /*
+                              관리자 문의 등록
+                            */
+                            io.emit("admin-request", {
+                                software: sw.name,
+                                message: message,
+                                createdAt: new Date()
+                            });
+
+                        }
+
+                        /*
+                          채팅 저장
+                        */
+                        db.query(
+                            "INSERT INTO chatbot_messages (message, reply) VALUES (?, ?)",
+                            [message, reply],
+                            (saveErr) => {
+
+                                if (saveErr) {
+                                    console.error("메시지 저장 실패:", saveErr);
+                                }
+                            }
+                        );
+
+                        /*
+                          사용자 응답
+                        */
+                        socket.emit(
+                            "chat response",
+                            reply
+                        );
+
                     }
-                  }
-              );
+                );
 
-              // 사용자 응답
-              socket.emit("chat response", reply);
-            }
-        );
-      });
+            });
+
+        });
+
+        socket.on('disconnect', () => {
+            console.log('연결 종료');
+        });
+
     });
 
-    socket.on('disconnect', () => {
-      console.log('연결 종료');
-    });
-
-  });
 };
