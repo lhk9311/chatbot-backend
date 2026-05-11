@@ -54,7 +54,7 @@ app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: ["http://localhost:3001", "http://localhost:3002"] }
+  cors: { origin: ["http://localhost:3001", "http://localhost:3002", "http://52.78.28.91:4000"] }
 });
 
 // 👉 라우터 연결
@@ -95,6 +95,7 @@ app.get('/messages', (req, res) => {
 // 👉 socket 연결
 require('./socket/chatSocket')(io);
 
-server.listen(3000, () => {
+// 로컬에선는 3000 포트
+server.listen(4000, () => {
   console.log('서버 실행됨');
 });
