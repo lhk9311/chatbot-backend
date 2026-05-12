@@ -1,9 +1,11 @@
 const OpenAI = require("openai");
 
+// 1. OpenAI 클라이언트 생성 (.env의 API 키 사용)
 const client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// 2. GPT한테 질문하는 함수
 async function askLLM(question) {
 
     try {
@@ -17,7 +19,7 @@ async function askLLM(question) {
                 {
                     role: "system",
                     content: `
-                    너는 사내 소프트웨어 헬프데스크 챗봇이다.
+                    너는 사내 소프트웨어 헬프데스크 챗봇이다. 
                     업무적으로 간단히 답변해라.
                     `
                 },

@@ -1,3 +1,4 @@
+// 초기 코드 (안쓰임)
 const db = require('../db');
 
 function makeReply(message) {
@@ -6,6 +7,7 @@ function makeReply(message) {
   return "잘 모르겠어요.";
 }
 
+// 초기 코드 2 (체팅처리) ---> 원래는 HTTP POST로 메시지 받아서 답변하는데  -> Socket.io로 처리하도록 바꿈
 exports.chat = (req, res) => {
   const message = req.body.message;
   const reply = makeReply(message);
@@ -20,6 +22,8 @@ exports.chat = (req, res) => {
   );
 };
 
+// 채팅 내역 조회 (server.js에 /messages API 있어서 중복됨.)
+// GET /chat/messages → chatbot_messages 테이블 전체 조회
 exports.getMessages = (req, res) => {
   const sql = "SELECT * FROM chatbot_messages ORDER BY id ASC";
 
@@ -33,6 +37,7 @@ exports.getMessages = (req, res) => {
   });
 };
 
+// FAQ 목록 조회 (프론트에 뿌릴.)
 exports.getFaqs = (req, res) => {
   const sql = `
     SELECT DISTINCT

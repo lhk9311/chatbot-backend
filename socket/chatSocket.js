@@ -1,5 +1,28 @@
+function printStats() {
+
+    const total = faqCount + gptCount;
+
+    if (total === 0) return;
+
+    const faqRate =
+        ((faqCount / total) * 100).toFixed(1);
+
+    const gptRate =
+        ((gptCount / total) * 100).toFixed(1);
+
+    console.log("====== 통계 ======");
+    console.log("총 요청:", total);
+    console.log("FAQ 처리:", faqCount);
+    console.log("GPT 처리:", gptCount);
+    console.log("FAQ 처리율:", faqRate + "%");
+    console.log("GPT 처리율:", gptRate + "%");
+}
+
 const db = require('../db');
 const askLLM = require('../services/openaiService');
+
+let faqCount = 0; // 추가
+let gptCount = 0; // 추가
 
 module.exports = (io) => {
 
@@ -83,13 +106,24 @@ module.exports = (io) => {
                             */
                             if (faqResults.length > 0) {
 
+                                faqCount++;
+
+                                console.log("FAQ 처리:", faqCount);
+
+                                printStats();
+
                                 reply = faqResults[0].answer;
 
                             } else {
-
                                 /*
                                   FAQ 없음 → GPT
                                 */
+
+                                gptCount++;
+
+                                console.log("GPT 처리:", gptCount);
+
+                                printStats();
 
                                 const llmReply = await askLLM(message);
 
@@ -172,6 +206,12 @@ module.exports = (io) => {
                         */
                         if (faqResults.length > 0) {
 
+                            faqCount++;
+
+                            console.log("FAQ 처리:", faqCount);
+
+                            printStats();
+
                             reply = faqResults[0].answer;
 
                         } else {
@@ -179,6 +219,12 @@ module.exports = (io) => {
                             /*
                               FAQ 없음 → GPT
                             */
+
+                            gptCount++;
+
+                            console.log("GPT 처리:", gptCount);
+
+                            printStats();
 
                             const llmReply = await askLLM(message);
 

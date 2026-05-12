@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const mysql = require('mysql2');
 
+// Spring Boot의 DataSource 설정이랑 똑같음. MySQL 연결 설정
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
